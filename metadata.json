@@ -1,0 +1,6 @@
+{
+  "name": "Verdant Grove",
+  "description": "Pure Food. Pure Life. Premium 100% certified organic groceries, pantry staples, and sustainably sourced goods.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
