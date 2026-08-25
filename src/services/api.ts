@@ -26,8 +26,8 @@
 import { Product, Review, CartItem, User, Order } from '../types';
 import { initialProducts, initialReviews } from '../data/products';
 
-// 🌐 1. Base URL Configuration (Defaults to http://127.0.0.1:8000/api)
-export const RAW_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
+// 🌐 1. Base URL Configuration (Defaults to relative /api on same host, or VITE_API_BASE_URL if configured)
+export const RAW_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 export const API_BASE_URL = RAW_BASE_URL.replace(/\/+$/, '');
 
 /**
