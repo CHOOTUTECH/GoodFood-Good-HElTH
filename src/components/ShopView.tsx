@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Leaf, Star, ShoppingBag, Check, SlidersHorizontal, ChevronDown, CheckSquare, Square } from 'lucide-react';
+import { Leaf, Star, ShoppingBag, Check, SlidersHorizontal, ChevronDown, CheckSquare, Square, RefreshCw, Loader2, Sparkles, User as UserIcon } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { Product } from '../types';
 
@@ -9,39 +9,49 @@ import { Product } from '../types';
  * ==============================================================================
  * 
  * 📌 HINDI / ENGLISH INSTRUCTIONS:
- * - Server side filtering & pagination ke liye:
+ * - Server side filtering & pagination:
  *   GET /api/products?category=${categoryFilter}&maxPrice=${maxPrice}&sort=${sortBy}&page=${currentPage}&limit=12
- * - Backend se { products, totalCount, totalPages } receive karke state me set kar sakte hain.
  */
 
 export const ShopView: React.FC = () => {
   const {
     products,
+    isLoadingProducts,
+    productsError,
+    refetchProducts,
     navigateToProduct,
     addToCart,
     categoryFilter,
     setCategoryFilter,
-    openQuickView
+    openQuickView,
+    currentUser,
+    setIsAuthModalOpen,
+    setAuthModalMode
   } = useShop();
 
-  const [maxPrice, setMaxPrice] = useState<number>(50);
+  const [maxPrice, setMaxPrice] = useState<number>(100);
   const [selectedCertifications, setSelectedCertifications] = useState<string[]>(['USDA Organic']);
   const [sortBy, setSortBy] = useState<string>('featured');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [addedItem, setAddedItem] = useState<string | null>(null);
 
-  // ==============================================================================
-  // 🔗 [API INTEGRATION POINT 9: CATEGORIES & COUNTS API]
-  // ==============================================================================
-  // GET /api/categories
-  const categories = [
-    { name: 'All Products', count: 48 },
-    { name: 'Oils & Vinegars', count: 8 },
-    { name: 'Nuts & Seeds', count: 12 },
-    { name: 'Grains & Legumes', count: 9 },
-    { name: 'Superfoods & Powders', count: 11 },
-    { name: 'Natural Sweeteners', count: 8 }
-  ];
+  // Dynamically compute categories & counts from loaded API products
+  const categories = useMemo(() => {
+    const counts: Record<string, number> = {};
+    products.forEach(p => {
+      const cat = p.category || 'General';
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+
+    const categoryList = [
+      { name: 'All Products', count: products.length },
+      ...Object.keys(counts).map(cat => ({
+        name: cat,
+        count: counts[cat]
+      }))
+    ];
+    return categoryList;
+  }, [products]);
 
   const certifications = [
     'USDA Organic',
@@ -66,7 +76,7 @@ export const ShopView: React.FC = () => {
   const [showMobileFilters, setShowMobileFilters] = useState<boolean>(false);
 
   // ==============================================================================
-  // 🔗 [API INTEGRATION POINT 10: CLIENT / SERVER FILTER LOGIC]
+  // 🔗 [API: FILTER LOGIC OVER LOADED BACKEND PRODUCTS]
   // ==============================================================================
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
@@ -82,7 +92,7 @@ export const ShopView: React.FC = () => {
     }).sort((a, b) => {
       if (sortBy === 'price-low') return a.price - b.price;
       if (sortBy === 'price-high') return b.price - a.price;
-      if (sortBy === 'rating') return b.reviewCount - a.reviewCount;
+      if (sortBy === 'rating') return (b.reviewCount || 0) - (a.reviewCount || 0);
       if (sortBy === 'name') return a.name.localeCompare(b.name);
       return 0; // featured
     });
@@ -245,18 +255,88 @@ export const ShopView: React.FC = () => {
           </aside>
 
           {/* Right Product Grid */}
-          <main className="lg:col-span-9">
-            {filteredProducts.length === 0 ? (
+          <main className="lg:col-span-9 space-y-6">
+            {/* User Access Banner */}
+            {!currentUser && (
+              <div className="bg-[#153e26] text-white p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm border border-[#235835]">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-[#a3e635] shrink-0">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-bold">Sign In to Track Orders & Unlock Member Pricing</h4>
+                    <p className="text-[11px] sm:text-xs text-[#c5ddcb]">Save delivery addresses, track packages live, and earn harvest points.</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    onClick={() => {
+                      setAuthModalMode('login');
+                      setIsAuthModalOpen(true);
+                    }}
+                    className="flex-1 sm:flex-none px-4 py-2 bg-[#a3e635] hover:bg-[#92dc22] text-[#153e26] font-bold text-xs rounded-xl transition-all cursor-pointer whitespace-nowrap"
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAuthModalMode('register');
+                      setIsAuthModalOpen(true);
+                    }}
+                    className="flex-1 sm:flex-none px-4 py-2 bg-white/15 hover:bg-white/25 text-white font-semibold text-xs rounded-xl transition-all cursor-pointer whitespace-nowrap border border-white/20"
+                  >
+                    Register
+                  </button>
+                </div>
+              </div>
+            )}
+            {isLoadingProducts ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="bg-white rounded-2xl border border-[#e5e8e1] p-4 animate-pulse space-y-4">
+                    <div className="w-full aspect-[4/3] bg-[#f0f2eb] rounded-xl" />
+                    <div className="h-4 bg-[#e8ece3] rounded w-3/4" />
+                    <div className="h-3 bg-[#e8ece3] rounded w-1/2" />
+                    <div className="flex justify-between items-center pt-2">
+                      <div className="h-5 bg-[#e8ece3] rounded w-1/4" />
+                      <div className="h-8 bg-[#e8ece3] rounded w-1/3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : products.length === 0 ? (
+              <div className="bg-white rounded-2xl p-8 sm:p-12 text-center border border-[#e5e8e1] space-y-4">
+                <div className="w-14 h-14 rounded-full bg-[#f4f6f0] mx-auto flex items-center justify-center text-[#153e26]">
+                  <Leaf className="w-7 h-7" />
+                </div>
+                <h3 className="font-serif text-2xl font-bold text-[#153e26]">No Products in Backend Database</h3>
+                <p className="text-xs sm:text-sm text-[#627363] max-w-md mx-auto">
+                  Products are fetched live from <code className="bg-[#f0f2ea] px-2 py-0.5 rounded text-[#153e26] font-mono text-xs">GET /api/products</code>. When you add items in your backend server (or start <code className="bg-[#f0f2ea] px-2 py-0.5 rounded text-[#153e26] font-mono text-xs">http://127.0.0.1:8000</code>), they will instantly render here.
+                </p>
+                {productsError && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 py-1.5 px-3 rounded-lg max-w-sm mx-auto">
+                    {productsError}
+                  </p>
+                )}
+                <button
+                  onClick={() => refetchProducts()}
+                  className="px-6 py-2.5 bg-[#153e26] hover:bg-[#205234] text-white rounded-xl text-xs font-semibold cursor-pointer min-h-[40px] inline-flex items-center gap-2 shadow-sm transition-all"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Reload Products from API</span>
+                </button>
+              </div>
+            ) : filteredProducts.length === 0 ? (
               <div className="bg-white rounded-2xl p-8 sm:p-12 text-center border border-[#e5e8e1] space-y-4">
                 <div className="w-12 h-12 rounded-full bg-[#f4f6f0] mx-auto flex items-center justify-center text-[#153e26]">
                   <Leaf className="w-6 h-6" />
                 </div>
-                <h3 className="font-serif text-xl font-bold text-[#153e26]">No products found</h3>
+                <h3 className="font-serif text-xl font-bold text-[#153e26]">No products match filter</h3>
                 <p className="text-xs sm:text-sm text-[#627363]">Try adjusting your price filter or category selection.</p>
                 <button
                   onClick={() => {
                     setCategoryFilter('All Products');
-                    setMaxPrice(60);
+                    setMaxPrice(100);
                   }}
                   className="px-5 py-2.5 bg-[#153e26] text-white rounded-lg text-xs font-semibold cursor-pointer min-h-[40px]"
                 >

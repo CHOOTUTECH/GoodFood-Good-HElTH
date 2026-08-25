@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Leaf, ShieldCheck, Truck, RotateCcw, Sprout, HeartHandshake, Globe, ArrowRight, Star, ShoppingBag, Check, Sun, Users, Award, Calendar } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Leaf, ShieldCheck, Truck, RotateCcw, Sprout, HeartHandshake, Globe, ArrowRight, Star, ShoppingBag, Check, Sun, Users, Award, Calendar, Sparkles } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { Product } from '../types';
 import { MarketingService } from '../services/api';
@@ -20,7 +20,18 @@ import harvestBasketImage from '../assets/images/harvest_basket_fresh_1786971174
  */
 
 export const HomeView: React.FC = () => {
-  const { products, setCurrentView, navigateToProduct, addToCart, setCategoryFilter, setIsAboutOpen } = useShop();
+  const { 
+    products, 
+    isLoadingProducts, 
+    setCurrentView, 
+    navigateToProduct, 
+    addToCart, 
+    setCategoryFilter, 
+    setIsAboutOpen,
+    currentUser,
+    setIsAuthModalOpen,
+    setAuthModalMode
+  } = useShop();
   const [addedItem, setAddedItem] = useState<string | null>(null);
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
@@ -28,9 +39,12 @@ export const HomeView: React.FC = () => {
   const [selectedFarmTab, setSelectedFarmTab] = useState<'harvest' | 'family' | 'soil'>('harvest');
 
   // ==============================================================================
-  // 🔗 [API INTEGRATION POINT 4: FEATURED PRODUCTS SELECTION]
+  // 🔗 [API INTEGRATION POINT 4: FEATURED PRODUCTS SELECTION FROM LIVE API]
   // ==============================================================================
-  const featuredProducts = products.filter(p => p.featured).slice(0, 5);
+  const featuredProducts = useMemo(() => {
+    const featured = products.filter(p => p.featured);
+    return (featured.length > 0 ? featured : products).slice(0, 5);
+  }, [products]);
 
   const handleAddToCart = (e: React.MouseEvent, product: Product) => {
     e.stopPropagation();
@@ -230,97 +244,127 @@ export const HomeView: React.FC = () => {
           </div>
 
           {/* Product Cards Grid (Responsive 1-col on mobile, 2-col on sm, 5-col on desktop) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6">
-            {featuredProducts.map((product) => (
-              <div
-                key={product.id}
-                onClick={() => navigateToProduct(product.id)}
-                className="group bg-white rounded-2xl border border-[#e8ece5] overflow-hidden hover:shadow-xl hover:border-[#c5d4c8] transition-all duration-300 flex flex-col justify-between cursor-pointer"
+          {isLoadingProducts ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="bg-white rounded-2xl border border-[#e8ece5] p-4 animate-pulse space-y-3">
+                  <div className="w-full aspect-[4/3] bg-[#f0f2eb] rounded-xl" />
+                  <div className="h-4 bg-[#e8ece3] rounded w-3/4" />
+                  <div className="h-3 bg-[#e8ece3] rounded w-1/2" />
+                  <div className="h-8 bg-[#e8ece3] rounded w-full mt-2" />
+                </div>
+              ))}
+            </div>
+          ) : featuredProducts.length === 0 ? (
+            <div className="bg-white rounded-2xl p-8 text-center border border-[#e8ece5] space-y-3 max-w-lg mx-auto">
+              <Leaf className="w-8 h-8 text-[#2e7d32] mx-auto" />
+              <h3 className="font-serif text-lg font-bold text-[#153e26]">Backend Products Ready</h3>
+              <p className="text-xs text-[#5d705e]">
+                Products added to your backend server (<code className="font-mono text-[11px] bg-[#f0f2ea] px-1 py-0.5 rounded">http://127.0.0.1:8000/api/products</code>) will automatically display here.
+              </p>
+              <button
+                onClick={() => {
+                  setCategoryFilter('All Products');
+                  setCurrentView('shop');
+                }}
+                className="px-4 py-2 bg-[#153e26] hover:bg-[#205234] text-white rounded-lg text-xs font-semibold"
               >
-                {/* Top Badge & Image */}
-                <div className="relative pt-3 px-3">
-                  <div className="flex items-center justify-between z-10">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#e8f5e9] text-[#2e7d32]">
-                      <Leaf className="w-2.5 h-2.5" />
-                      <span>{product.badge || 'Organic'}</span>
-                    </span>
-                    {product.isSale && (
-                      <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#fbeae8] text-[#c62828]">
-                        Sale
+                Open Shop Catalog
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6">
+              {featuredProducts.map((product) => (
+                <div
+                  key={product.id}
+                  onClick={() => navigateToProduct(product.id)}
+                  className="group bg-white rounded-2xl border border-[#e8ece5] overflow-hidden hover:shadow-xl hover:border-[#c5d4c8] transition-all duration-300 flex flex-col justify-between cursor-pointer"
+                >
+                  {/* Top Badge & Image */}
+                  <div className="relative pt-3 px-3">
+                    <div className="flex items-center justify-between z-10">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#e8f5e9] text-[#2e7d32]">
+                        <Leaf className="w-2.5 h-2.5" />
+                        <span>{product.badge || 'Organic'}</span>
                       </span>
-                    )}
-                  </div>
-
-                  <div className="w-full aspect-[4/3] mt-2 overflow-hidden rounded-xl bg-[#f4f5f0] flex items-center justify-center">
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Content */}
-                <div className="p-4 flex-1 flex flex-col justify-between">
-                  <div className="space-y-1.5">
-                    {/* Stars */}
-                    <div className="flex items-center gap-1 text-[#f59e0b] text-xs">
-                      {[...Array(5)].map((_, i) => (
-                        <Star key={i} className="w-3.5 h-3.5 fill-current" />
-                      ))}
-                      <span className="text-[#64748b] text-[11px] ml-1 font-medium">
-                        ({product.reviewCount})
-                      </span>
+                      {product.isSale && (
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#fbeae8] text-[#c62828]">
+                          Sale
+                        </span>
+                      )}
                     </div>
 
-                    <h3 className="font-serif text-[16px] font-bold text-[#153e26] line-clamp-1 group-hover:text-[#2d6a4f] transition-colors">
-                      {product.name}
-                    </h3>
-
-                    <p className="text-xs text-[#637564] line-clamp-2 leading-relaxed">
-                      {product.subtitle || product.description}
-                    </p>
+                    <div className="w-full aspect-[4/3] mt-2 overflow-hidden rounded-xl bg-[#f4f5f0] flex items-center justify-center">
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-500"
+                      />
+                    </div>
                   </div>
 
-                  {/* Price & Add to Cart button */}
-                  <div className="pt-4 flex items-center justify-between mt-auto">
-                    <div>
-                      <div className="text-base font-bold text-[#153e26]">
-                        ${product.price.toFixed(2)}
+                  {/* Content */}
+                  <div className="p-4 flex-1 flex flex-col justify-between">
+                    <div className="space-y-1.5">
+                      {/* Stars */}
+                      <div className="flex items-center gap-1 text-[#f59e0b] text-xs">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} className="w-3.5 h-3.5 fill-current" />
+                        ))}
+                        <span className="text-[#64748b] text-[11px] ml-1 font-medium">
+                          ({product.reviewCount || 0})
+                        </span>
                       </div>
-                      {product.originalPrice && (
-                        <div className="text-xs text-gray-400 line-through">
-                          ${product.originalPrice.toFixed(2)}
-                        </div>
-                      )}
+
+                      <h3 className="font-serif text-[16px] font-bold text-[#153e26] line-clamp-1 group-hover:text-[#2d6a4f] transition-colors">
+                        {product.name}
+                      </h3>
+
+                      <p className="text-xs text-[#637564] line-clamp-2 leading-relaxed">
+                        {product.subtitle || product.description}
+                      </p>
                     </div>
 
-                    <button
-                      onClick={(e) => handleAddToCart(e, product)}
-                      className={`min-h-[40px] px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                        addedItem === product.id
-                          ? 'bg-green-700 text-white'
-                          : 'bg-[#153e26] hover:bg-[#205234] text-white shadow-sm'
-                      }`}
-                    >
-                      {addedItem === product.id ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Added</span>
-                        </>
-                      ) : (
-                        <>
-                          <ShoppingBag className="w-3.5 h-3.5" />
-                          <span>Add</span>
-                        </>
-                      )}
-                    </button>
+                    {/* Price & Add to Cart button */}
+                    <div className="pt-4 flex items-center justify-between mt-auto">
+                      <div>
+                        <div className="text-base font-bold text-[#153e26]">
+                          ${product.price.toFixed(2)}
+                        </div>
+                        {product.originalPrice && (
+                          <div className="text-xs text-gray-400 line-through">
+                            ${product.originalPrice.toFixed(2)}
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={(e) => handleAddToCart(e, product)}
+                        className={`min-h-[40px] px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                          addedItem === product.id
+                            ? 'bg-green-700 text-white'
+                            : 'bg-[#153e26] hover:bg-[#205234] text-white shadow-sm'
+                        }`}
+                      >
+                        {addedItem === product.id ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Added</span>
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingBag className="w-3.5 h-3.5" />
+                            <span>Add</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           <div className="mt-8 sm:mt-12 text-center">
             <button
@@ -330,7 +374,7 @@ export const HomeView: React.FC = () => {
               }}
               className="inline-flex items-center gap-2 text-sm font-semibold text-[#153e26] hover:text-[#2d6a4f] group cursor-pointer p-2"
             >
-              <span>View All 48 Organic Products</span>
+              <span>{products.length > 0 ? `View All ${products.length} Organic Products` : 'Explore Complete Catalog'}</span>
               <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
             </button>
           </div>
@@ -504,6 +548,124 @@ export const HomeView: React.FC = () => {
                   <span>Read Our Full Story</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Join Family / Member Access Section on Landing Page */}
+      <section className="py-12 sm:py-16 bg-gradient-to-b from-[#fbfbf9] to-[#f4f7f2] border-t border-[#e2e6de]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-[#153e26] rounded-3xl p-6 sm:p-10 lg:p-12 text-white relative overflow-hidden shadow-2xl">
+            {/* Background Leaf Accents */}
+            <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-[#2e7d32]/30 blur-3xl pointer-events-none" />
+            <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 rounded-full bg-[#a3e635]/15 blur-3xl pointer-events-none" />
+
+            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+              <div className="lg:col-span-7 space-y-4">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-[#a3e635] text-xs font-semibold uppercase tracking-wider border border-white/15">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Member Privileges & Live Tracking</span>
+                </div>
+
+                <h3 className="font-serif text-2xl sm:text-3xl lg:text-4xl font-bold leading-tight">
+                  {currentUser ? `Welcome back, ${currentUser.name.split(' ')[0]}!` : 'Sign In or Register for Real-Time Order Tracking'}
+                </h3>
+
+                <p className="text-xs sm:text-sm text-[#c6decc] leading-relaxed max-w-xl">
+                  {currentUser 
+                    ? 'Your organic farm provisions are synced. Access your live delivery status, custom nutrition insights, and 1-click re-ordering anytime.'
+                    : 'Create your free Verdant Grove account or sign in to track live delivery dispatch, view your order history, save favorite harvest items, and receive fresh crop alerts.'}
+                </p>
+
+                {/* Features List */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-xs text-[#dff0e3]">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-[#a3e635] shrink-0" />
+                    <span>Real-time GPS Delivery Tracking</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-[#a3e635] shrink-0" />
+                    <span>Save Shipping & Payment Addresses</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-[#a3e635] shrink-0" />
+                    <span>1-Tap Reordering of Farm Provisions</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-[#a3e635] shrink-0" />
+                    <span>Exclusive 10% First Order Promo</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Interactive Action Cards */}
+              <div className="lg:col-span-5 bg-white/10 backdrop-blur-md p-6 rounded-2xl border border-white/20 space-y-4 text-center">
+                {currentUser ? (
+                  <div className="space-y-4">
+                    <div className="w-14 h-14 mx-auto rounded-full bg-[#a3e635] text-[#153e26] flex items-center justify-center font-bold text-xl shadow-lg">
+                      {currentUser.name ? currentUser.name[0] : 'U'}
+                    </div>
+                    <div>
+                      <div className="font-bold text-base text-white">{currentUser.name}</div>
+                      <div className="text-xs text-[#c3e8ca]">{currentUser.email}</div>
+                    </div>
+                    <div className="flex flex-col gap-2 pt-2">
+                      <button
+                        onClick={() => setCurrentView('track')}
+                        className="w-full py-3 bg-[#a3e635] hover:bg-[#8fd426] text-[#153e26] font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                      >
+                        <Truck className="w-4 h-4" />
+                        <span>Track My Active Orders</span>
+                      </button>
+                      <button
+                        onClick={() => setCurrentView('shop')}
+                        className="w-full py-2.5 bg-white/15 hover:bg-white/25 text-white font-semibold text-xs rounded-xl transition-all border border-white/20 cursor-pointer"
+                      >
+                        Browse Organic Market
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <h4 className="font-serif text-lg font-bold text-white">Join Verdant Grove</h4>
+                      <p className="text-xs text-[#c5ddcb]">Access your orders, track parcels, and explore products</p>
+                    </div>
+
+                    <div className="flex flex-col gap-2.5">
+                      <button
+                        onClick={() => {
+                          setAuthModalMode('login');
+                          setIsAuthModalOpen(true);
+                        }}
+                        className="w-full py-3.5 bg-white text-[#153e26] hover:bg-[#f2f4ec] font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                      >
+                        <span>Sign In to Account</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setAuthModalMode('register');
+                          setIsAuthModalOpen(true);
+                        }}
+                        className="w-full py-3 bg-white/15 hover:bg-white/25 text-white font-semibold text-xs sm:text-sm rounded-xl transition-all border border-white/20 cursor-pointer active:scale-95"
+                      >
+                        Create Free Account
+                      </button>
+
+                      <button
+                        onClick={() => setCurrentView('track')}
+                        className="w-full py-2 text-xs text-[#a3e635] hover:text-white flex items-center justify-center gap-1.5 transition-colors cursor-pointer font-medium"
+                      >
+                        <Truck className="w-3.5 h-3.5" />
+                        <span>Track an order with Order ID</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

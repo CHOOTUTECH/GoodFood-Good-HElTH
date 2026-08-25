@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product, CartItem, User, Order } from '../types';
 import { initialProducts } from '../data/products';
-import { ProductService, CartService, AuthService, OrderTrackerService, LoginPayload, RegisterPayload } from '../services/api';
+import { ProductService, CartService, AuthService, OrderService, OrderTrackerService, UserService, LoginPayload, RegisterPayload } from '../services/api';
 
 /**
  * ==============================================================================
@@ -26,6 +26,9 @@ export type AppView = 'home' | 'shop' | 'product' | 'cart' | 'track' | 'account'
 interface ShopContextType {
   // Products & Shop State
   products: Product[];
+  isLoadingProducts: boolean;
+  productsError: string | null;
+  refetchProducts: () => Promise<void>;
   cart: CartItem[];
   wishlist: string[];
   currentView: AppView;
@@ -85,9 +88,11 @@ const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
 export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // ==============================================================================
-  // 🔗 [API INTEGRATION POINT 1: FETCH PRODUCTS FROM BACKEND]
+  // 🔗 [API INTEGRATION POINT 1: FETCH PRODUCTS WITH DEMO FALLBACK]
   // ==============================================================================
   const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [isLoadingProducts, setIsLoadingProducts] = useState<boolean>(false);
+  const [productsError, setProductsError] = useState<string | null>(null);
 
   // Initialize Default Logged-In User or read from localStorage
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -99,7 +104,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return null;
       }
     }
-    // Default initial demonstration user
+    // Default demonstration user
     return {
       id: 'usr-jairam-101',
       name: 'Jairam Singh',
@@ -129,7 +134,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return [];
       }
     }
-    // Seed an initial demo order so user can immediately see live tracking
     return [
       {
         id: 'VG-8492',
@@ -144,22 +148,22 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         items: [
           {
-            product: initialProducts[0], // Extra Virgin Olive Oil
+            product: initialProducts[0],
             quantity: 2,
-            selectedSize: '500ml Glass Bottle',
-            unitPrice: 24.50
+            selectedSize: '250ml',
+            unitPrice: 18.99
           },
           {
-            product: initialProducts[2], // Maple Syrup
+            product: initialProducts[2],
             quantity: 1,
-            selectedSize: '32 oz Glass Jug',
+            selectedSize: '32 oz',
             unitPrice: 22.00
           }
         ],
-        subtotal: 71.00,
-        discount: 7.10,
+        subtotal: 59.98,
+        discount: 5.99,
         shipping: 0,
-        total: 63.90,
+        total: 53.99,
         paymentMethod: 'Credit Card (Visa **** 4242)',
         status: 'in_transit',
         orderDate: 'Aug 18, 2026',
@@ -216,12 +220,127 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [currentTrackedOrder, setCurrentTrackedOrder] = useState<Order | null>(null);
 
-  // Sync Orders to LocalStorage
+  // Sync Orders to LocalStorage & Backend (GET /api/orders)
   useEffect(() => {
     if (orders.length > 0) {
       localStorage.setItem('vg_orders_history', JSON.stringify(orders));
     }
   }, [orders]);
+
+  // Cart & Wishlist initialized
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    const saved = localStorage.getItem('vg_cart');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {
+        // fallback
+      }
+    }
+    return [
+      {
+        product: initialProducts[0],
+        quantity: 1,
+        selectedSize: '250ml',
+        unitPrice: 18.99
+      },
+      {
+        product: initialProducts[2],
+        quantity: 1,
+        selectedSize: '16 oz',
+        unitPrice: 14.99
+      }
+    ];
+  });
+
+  const [wishlist, setWishlist] = useState<string[]>(() => {
+    const saved = localStorage.getItem('vg_wishlist');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return ['avocado-oil'];
+      }
+    }
+    return ['avocado-oil'];
+  });
+
+  const [currentView, setCurrentView] = useState<AppView>('home');
+  const [selectedProductId, setSelectedProductId] = useState<string>('avocado-oil');
+  const [categoryFilter, setCategoryFilter] = useState<string>('All Products');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Refetch function for manual reload or retry
+  const fetchProductsFromApi = async () => {
+    setIsLoadingProducts(true);
+    setProductsError(null);
+    try {
+      const prodData = await ProductService.getProducts();
+      if (prodData && Array.isArray(prodData.products) && prodData.products.length > 0) {
+        setProducts(prodData.products);
+        setSelectedProductId(prev => prev || prodData.products[0].id || prodData.products[0].slug || '');
+      } else {
+        setProducts(initialProducts);
+      }
+    } catch {
+      // Keep demo products active
+      setProducts(initialProducts);
+    } finally {
+      setIsLoadingProducts(false);
+    }
+  };
+
+  // Initial load from backend API: GET /api/products, GET /api/auth/me, GET /api/orders, GET /api/cart
+  useEffect(() => {
+    async function initBackendData() {
+      // 1. Fetch live products from backend (GET /api/products) - public endpoint
+      await fetchProductsFromApi();
+
+      // Only attempt authenticated user endpoints if an auth token or logged-in user is present
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      if (token) {
+        try {
+          // 2. Fetch authenticated user profile (GET /api/auth/me)
+          const user = await AuthService.getCurrentUser();
+          if (user) {
+            setCurrentUser(user);
+          }
+
+          // 3. Fetch user orders (GET /api/orders)
+          const fetchedOrders = await OrderService.getOrders();
+          if (fetchedOrders && fetchedOrders.length > 0) {
+            setOrders(fetchedOrders);
+          }
+
+          // 4. Fetch cart from server (GET /api/cart)
+          const serverCart = await CartService.getCart();
+          if (serverCart && serverCart.length > 0) {
+            setCart(serverCart);
+          }
+        } catch {
+          // Silent catch for token expiry
+        }
+      }
+    }
+    initBackendData();
+  }, []);
+
+  // Sync Wishlist to Backend: POST /api/user/wishlist
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    if (token && currentUser) {
+      UserService.syncWishlist(wishlist).catch(() => {});
+    }
+  }, [wishlist, currentUser]);
+
+  // Sync Cart to Backend: POST /api/cart/sync (only for logged-in sessions)
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    if (token && currentUser) {
+      CartService.syncCartWithServer(cart).catch(() => {});
+    }
+  }, [cart, currentUser]);
 
   // Sync Current User to LocalStorage
   useEffect(() => {
@@ -231,31 +350,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem('vg_current_user');
     }
   }, [currentUser]);
-
-  // Initialize with initial cart items
-  const mapleProduct = initialProducts.find(p => p.id === 'maple-syrup') || initialProducts[2];
-  const amaranthProduct = initialProducts.find(p => p.id === 'amaranth-grain') || initialProducts[3];
-
-  const [cart, setCart] = useState<CartItem[]>([
-    {
-      product: mapleProduct,
-      quantity: 1,
-      selectedSize: '32 oz Glass Bottle',
-      unitPrice: 24.00
-    },
-    {
-      product: amaranthProduct,
-      quantity: 1,
-      selectedSize: '1 lb Paper Sack',
-      unitPrice: 7.51
-    }
-  ]);
-
-  const [wishlist, setWishlist] = useState<string[]>(['avocado-oil']);
-  const [currentView, setCurrentView] = useState<AppView>('home');
-  const [selectedProductId, setSelectedProductId] = useState<string>('avocado-oil');
-  const [categoryFilter, setCategoryFilter] = useState<string>('All Products');
-  const [searchQuery, setSearchQuery] = useState<string>('');
 
   const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
@@ -417,6 +511,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <ShopContext.Provider
       value={{
         products,
+        isLoadingProducts,
+        productsError,
+        refetchProducts: fetchProductsFromApi,
         cart,
         wishlist,
         currentView,

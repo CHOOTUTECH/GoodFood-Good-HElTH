@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Leaf, Star, Truck, ShieldCheck, Sprout, Heart, ShoppingBag, Check, ChevronRight, Share2, Loader2 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
-import { initialReviews } from '../data/products';
+import { Product, Review } from '../types';
 import { ProductService } from '../services/api';
 
 /**
@@ -21,56 +21,116 @@ export const ProductDetailView: React.FC = () => {
   const {
     products,
     selectedProductId,
+    isLoadingProducts,
     setCurrentView,
     addToCart,
     wishlist,
     toggleWishlist
   } = useShop();
 
-  // ==============================================================================
-  // 🔗 [API INTEGRATION POINT 6: FETCH SINGLE PRODUCT BY ID]
-  // ==============================================================================
-  const product = products.find(p => p.id === selectedProductId) || products[0];
+  const [apiProduct, setApiProduct] = useState<Product | null>(null);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+
+  // Find product from list or fetch directly via API GET /api/products/{id}
+  const productFromList = products.find(p => p.id === selectedProductId || p.slug === selectedProductId);
+  const product = productFromList || apiProduct;
+
+  useEffect(() => {
+    async function loadProductDetail() {
+      if (!productFromList && selectedProductId) {
+        setIsLoadingDetail(true);
+        try {
+          const res = await ProductService.getProductBySlug(selectedProductId);
+          if (res) {
+            setApiProduct(res);
+          }
+        } catch (err) {
+          console.error('Failed to load product detail:', err);
+        } finally {
+          setIsLoadingDetail(false);
+        }
+      }
+    }
+    loadProductDetail();
+  }, [selectedProductId, productFromList]);
 
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [selectedSize, setSelectedSize] = useState<string>(
-    product.sizes ? product.sizes[0] : product.packageSize
-  );
+  const [selectedSize, setSelectedSize] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<'description' | 'nutrition' | 'reviews'>('description');
   const [addedAnimation, setAddedAnimation] = useState(false);
-  const [reviewsList, setReviewsList] = useState(initialReviews);
+  const [reviewsList, setReviewsList] = useState<any[]>([]);
   const [newReviewAuthor, setNewReviewAuthor] = useState('');
   const [newReviewTitle, setNewReviewTitle] = useState('');
   const [newReviewComment, setNewReviewComment] = useState('');
   const [newReviewRating, setNewReviewRating] = useState(5);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
+  // Set default size once product is available
+  useEffect(() => {
+    if (product) {
+      if (product.sizes && product.sizes.length > 0) {
+        setSelectedSize(product.sizes[0]);
+      } else {
+        setSelectedSize(product.packageSize || '');
+      }
+    }
+  }, [product]);
+
   // ==============================================================================
-  // 🔗 [API INTEGRATION POINT 7: FETCH REVIEWS FOR THIS PRODUCT]
+  // 🔗 [API: GET /api/products/{slug}/reviews]
   // ==============================================================================
   useEffect(() => {
-    /*
-    // 👉 UNCOMMENT TO FETCH REVIEWS FROM BACKEND:
     async function loadReviews() {
-      if (product?.id) {
-        const reviews = await ProductService.getProductReviews(product.id);
+      if (product?.id || product?.slug) {
+        const targetSlug = product.slug || product.id;
+        const reviews = await ProductService.getProductReviews(targetSlug);
         if (reviews && reviews.length > 0) {
           setReviewsList(reviews);
+        } else {
+          setReviewsList([]);
         }
       }
     }
     loadReviews();
-    */
-  }, [product?.id]);
+  }, [product?.id, product?.slug]);
+
+  if (isLoadingProducts || isLoadingDetail) {
+    return (
+      <div className="w-full bg-[#fbfbf9] min-h-[70vh] flex flex-col items-center justify-center py-20">
+        <Loader2 className="w-10 h-10 text-[#153e26] animate-spin mb-4" />
+        <p className="text-sm font-medium text-[#153e26]">Loading product details from server...</p>
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="w-full bg-[#fbfbf9] min-h-[70vh] flex flex-col items-center justify-center py-20 px-4 text-center">
+        <div className="w-16 h-16 rounded-full bg-[#f0f4ec] text-[#2e7d32] flex items-center justify-center mb-4">
+          <Leaf className="w-8 h-8" />
+        </div>
+        <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#153e26] mb-2">Product Not Found</h2>
+        <p className="text-sm text-[#546555] max-w-md mb-6">
+          The requested organic product could not be retrieved from the backend API.
+        </p>
+        <button
+          onClick={() => setCurrentView('shop')}
+          className="px-6 py-3 bg-[#153e26] hover:bg-[#205234] text-white text-sm font-semibold rounded-xl transition-all cursor-pointer"
+        >
+          Return to Shop Catalog
+        </button>
+      </div>
+    );
+  }
 
   const images = product.galleryImages && product.galleryImages.length > 0
     ? product.galleryImages
-    : [product.image];
+    : [product.image || 'https://images.unsplash.com/photo-1471193945509-9ad0617afabf?auto=format&fit=crop&q=80&w=800'];
 
   // Calculate current price based on selected size
   let currentPrice = product.price;
-  if (product.pricePerSize && product.pricePerSize[selectedSize]) {
+  if (product.pricePerSize && selectedSize && product.pricePerSize[selectedSize]) {
     currentPrice = product.pricePerSize[selectedSize];
   }
 
@@ -89,29 +149,17 @@ export const ProductDetailView: React.FC = () => {
 
     try {
       setIsSubmittingReview(true);
-      /*
-      // 👉 REAL API CALL:
-      // POST /api/products/:id/reviews
-      // const response = await fetch(`/api/products/${product.id}/reviews`, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     author: newReviewAuthor,
-      //     rating: newReviewRating,
-      //     title: newReviewTitle || 'Great product',
-      //     comment: newReviewComment
-      //   })
-      // });
-      */
-
-      const response = await ProductService.submitReview(product.id, {
+      const targetSlug = product.slug || product.id;
+      const response = await ProductService.submitReview(targetSlug, {
         author: newReviewAuthor,
         rating: newReviewRating,
         title: newReviewTitle || 'Verified Purchase Review',
         comment: newReviewComment
       });
 
-      setReviewsList(prev => [response.review, ...prev]);
+      if (response && response.review) {
+        setReviewsList(prev => [response.review!, ...prev]);
+      }
       setNewReviewAuthor('');
       setNewReviewTitle('');
       setNewReviewComment('');
@@ -616,6 +664,61 @@ export const ProductDetailView: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Sticky Mobile Add To Cart Action Bar (Floating above MobileBottomNav on small screens) */}
+        <div className="md:hidden fixed bottom-[58px] left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-[#e2e6de] px-4 py-2.5 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[10px] text-[#647866] font-medium leading-none">
+              {selectedSize || product.packageSize}
+            </div>
+            <div className="font-serif text-lg font-bold text-[#153e26] leading-tight mt-0.5">
+              ${(currentPrice * quantity).toFixed(2)}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="flex items-center border border-[#d2d8ce] rounded-lg bg-[#fbfbf9] overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                className="px-2.5 py-1.5 text-xs font-bold text-[#153e26] active:bg-gray-200"
+              >
+                -
+              </button>
+              <span className="px-2 text-xs font-bold text-[#153e26] min-w-[20px] text-center">
+                {quantity}
+              </span>
+              <button
+                type="button"
+                onClick={() => setQuantity(quantity + 1)}
+                className="px-2.5 py-1.5 text-xs font-bold text-[#153e26] active:bg-gray-200"
+              >
+                +
+              </button>
+            </div>
+
+            <button
+              onClick={handleAddToCart}
+              className={`px-4 py-2.5 rounded-xl font-semibold text-xs transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer ${
+                addedAnimation
+                  ? 'bg-[#2e7d32] text-white'
+                  : 'bg-[#153e26] text-white hover:bg-[#205234]'
+              }`}
+            >
+              {addedAnimation ? (
+                <>
+                  <Check className="w-4 h-4 text-[#a3e635]" />
+                  <span>Added!</span>
+                </>
+              ) : (
+                <>
+                  <ShoppingBag className="w-4 h-4" />
+                  <span>Add to Cart</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

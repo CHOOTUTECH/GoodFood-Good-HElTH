@@ -18,6 +18,7 @@ import { SearchModal } from './components/SearchModal';
 import { AboutModal } from './components/AboutModal';
 import { BlogModal } from './components/BlogModal';
 import { AuthModal } from './components/AuthModal';
+import { MobileBottomNav } from './components/MobileBottomNav';
 
 const AppContent: React.FC = () => {
   const { currentView } = useShop();
@@ -27,8 +28,8 @@ const AppContent: React.FC = () => {
       {/* Top Sticky Header */}
       <Header />
 
-      {/* Main Content Area with Smooth Screen Transitions */}
-      <main className="flex-1">
+      {/* Main Content Area with Smooth Screen Transitions and Mobile Bottom Padding */}
+      <main className="flex-1 pb-16 md:pb-0">
         <AnimatePresence mode="wait">
           {currentView === 'home' && (
             <motion.div
@@ -101,6 +102,9 @@ const AppContent: React.FC = () => {
 
       {/* Footer */}
       <Footer />
+
+      {/* Mobile Bottom Navigation Bar */}
+      <MobileBottomNav />
     </div>
   );
 };

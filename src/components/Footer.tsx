@@ -1,20 +1,30 @@
 import React, { useState } from 'react';
 import { Leaf, Instagram, Share2, Youtube, Phone, Mail, MapPin, CheckCircle2 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
+import { MarketingService } from '../services/api';
 
 export const Footer: React.FC = () => {
   const { setCurrentView, setCategoryFilter, setIsAboutOpen, setIsBlogOpen } = useShop();
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
 
-  const handleSubscribe = (e: React.FormEvent) => {
+  const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newsletterEmail.trim()) {
-      setSubscribed(true);
-      setTimeout(() => {
-        setNewsletterEmail('');
-        setSubscribed(false);
-      }, 4000);
+      try {
+        setSubscribing(true);
+        await MarketingService.subscribeNewsletter(newsletterEmail.trim());
+        setSubscribed(true);
+        setTimeout(() => {
+          setNewsletterEmail('');
+          setSubscribed(false);
+        }, 4000);
+      } catch (err) {
+        console.error('Newsletter subscription error:', err);
+      } finally {
+        setSubscribing(false);
+      }
     }
   };
 

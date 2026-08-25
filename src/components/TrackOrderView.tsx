@@ -178,6 +178,26 @@ export const TrackOrderView: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {!currentUser && (
+            <div className="mt-4 p-4 bg-[#153e26] text-white rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm border border-[#235835]">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-[#a3e635] shrink-0">
+                  <User className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs sm:text-sm font-bold">Have an existing account?</div>
+                  <div className="text-[11px] sm:text-xs text-[#c5ddcb]">Sign in to automatically sync all your past farm harvests and active shipments.</div>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="px-4 py-2 bg-[#a3e635] hover:bg-[#92dc22] text-[#153e26] font-bold text-xs rounded-xl transition-all cursor-pointer whitespace-nowrap"
+              >
+                Sign In / Register
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Global Search Bar */}
