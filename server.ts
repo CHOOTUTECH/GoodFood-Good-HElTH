@@ -225,6 +225,102 @@ async function startServer() {
     res.json({ product, success: true });
   });
 
+  // Admin Create Product: POST /api/products
+  app.post('/api/products', (req, res) => {
+    const data = req.body;
+    if (!data.name || !data.category || data.price === undefined) {
+      res.status(400).json({ error: 'Product name, category, and price are required' });
+      return;
+    }
+
+    const newId = data.id || data.slug || data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const uniqueId = productsDb.some(p => p.id === newId) ? `${newId}-${Date.now().toString().slice(-4)}` : newId;
+
+    const newProduct: Product = {
+      id: uniqueId,
+      slug: uniqueId,
+      name: data.name,
+      subtitle: data.subtitle || '100% Pure Organic Farm Harvest',
+      category: data.category,
+      price: Number(data.price),
+      originalPrice: data.originalPrice ? Number(data.originalPrice) : undefined,
+      rating: Number(data.rating) || 5.0,
+      reviewCount: Number(data.reviewCount) || 1,
+      image: data.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800',
+      galleryImages: data.galleryImages && data.galleryImages.length > 0 ? data.galleryImages : [data.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800'],
+      badge: data.badge || 'Fresh Harvest',
+      isSale: Boolean(data.isSale),
+      packageSize: data.packageSize || '500g Eco-Pouch',
+      sizes: data.sizes && data.sizes.length > 0 ? data.sizes : [data.packageSize || 'Standard'],
+      pricePerSize: data.pricePerSize || { [data.packageSize || 'Standard']: Number(data.price) },
+      description: data.description || 'Certified organic harvest from our family farm.',
+      detailedDescription: data.detailedDescription || data.description || 'Certified organic harvest from our family farm.',
+      keyBenefits: data.keyBenefits || ['100% USDA Certified Organic', 'Zero Preservatives', 'Non-GMO Verified', 'Direct Farm Sourced'],
+      specifications: data.specifications || {
+        origin: data.origin || 'Willamette Valley, Oregon, USA',
+        certifications: 'USDA Organic, Non-GMO Project Verified',
+        storage: 'Store in a cool, dry pantry away from direct sunlight.'
+      },
+      nutritionFacts: data.nutritionFacts || {
+        servingSize: '1 Tbsp (15ml / 15g)',
+        servingsPerContainer: '32',
+        calories: 120,
+        totalFat: '14g',
+        saturatedFat: '2g',
+        transFat: '0g',
+        polyunsaturatedFat: '2g',
+        monounsaturatedFat: '10g',
+        sodium: '0mg',
+        totalCarb: '0g',
+        dietaryFiber: '0g',
+        sugars: '0g',
+        protein: '0g'
+      },
+      inStock: data.inStock !== undefined ? Boolean(data.inStock) : true,
+      featured: Boolean(data.featured)
+    };
+
+    productsDb.unshift(newProduct);
+    res.status(201).json({ success: true, product: newProduct, message: 'Product created successfully!' });
+  });
+
+  // Admin Update Product: PUT /api/products/:id
+  app.put('/api/products/:id', (req, res) => {
+    const { id } = req.params;
+    const data = req.body;
+    const index = productsDb.findIndex(p => p.id === id || (p.slug && p.slug === id));
+
+    if (index === -1) {
+      res.status(404).json({ error: `Product with ID ${id} not found` });
+      return;
+    }
+
+    productsDb[index] = {
+      ...productsDb[index],
+      ...data,
+      price: data.price !== undefined ? Number(data.price) : productsDb[index].price,
+      originalPrice: data.originalPrice !== undefined ? (data.originalPrice ? Number(data.originalPrice) : undefined) : productsDb[index].originalPrice,
+      inStock: data.inStock !== undefined ? Boolean(data.inStock) : productsDb[index].inStock,
+      featured: data.featured !== undefined ? Boolean(data.featured) : productsDb[index].featured
+    };
+
+    res.json({ success: true, product: productsDb[index], message: 'Product updated successfully!' });
+  });
+
+  // Admin Delete Product: DELETE /api/products/:id
+  app.delete('/api/products/:id', (req, res) => {
+    const { id } = req.params;
+    const index = productsDb.findIndex(p => p.id === id || (p.slug && p.slug === id));
+
+    if (index === -1) {
+      res.status(404).json({ error: `Product with ID ${id} not found` });
+      return;
+    }
+
+    const removed = productsDb.splice(index, 1)[0];
+    res.json({ success: true, message: `Product "${removed.name}" deleted successfully!`, deletedId: id });
+  });
+
   app.get('/api/products/:slug/reviews', (req, res) => {
     const { slug } = req.params;
     const reviews = reviewsDb[slug] || initialReviews;
@@ -582,6 +678,121 @@ async function startServer() {
     }
 
     res.json(order);
+  });
+
+  // Admin Update Order Status: PUT /api/orders/:id/status
+  app.put('/api/orders/:id/status', (req, res) => {
+    const { id } = req.params;
+    const { status, note, carrier, estimatedDelivery } = req.body;
+    const order = ordersDb.find(o => o.id === id || o.trackingNumber === id);
+
+    if (!order) {
+      res.status(404).json({ error: `Order with ID ${id} not found` });
+      return;
+    }
+
+    const validStatuses: Order['status'][] = ['placed', 'harvested', 'packed', 'in_transit', 'out_for_delivery', 'delivered'];
+    if (!validStatuses.includes(status)) {
+      res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+      return;
+    }
+
+    order.status = status;
+    if (carrier) order.carrier = carrier;
+    if (estimatedDelivery) order.estimatedDelivery = estimatedDelivery;
+
+    // Advance and update tracking steps
+    const statusIndex = validStatuses.indexOf(status);
+    const nowStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
+
+    order.trackingSteps = order.trackingSteps.map((step, idx) => {
+      if (idx < statusIndex) {
+        return { ...step, completed: true, current: false };
+      } else if (idx === statusIndex) {
+        return {
+          ...step,
+          completed: true,
+          current: true,
+          timestamp: step.timestamp.startsWith('Pending') || step.timestamp === 'Just now' ? nowStr : step.timestamp,
+          description: note || step.description
+        };
+      } else {
+        return { ...step, completed: false, current: false };
+      }
+    });
+
+    res.json({ success: true, order, message: `Order status updated to "${status}"!` });
+  });
+
+  // Admin Update Entire Order: PUT /api/orders/:id
+  app.put('/api/orders/:id', (req, res) => {
+    const { id } = req.params;
+    const data = req.body;
+    const index = ordersDb.findIndex(o => o.id === id || o.trackingNumber === id);
+
+    if (index === -1) {
+      res.status(404).json({ error: `Order with ID ${id} not found` });
+      return;
+    }
+
+    ordersDb[index] = { ...ordersDb[index], ...data };
+    res.json({ success: true, order: ordersDb[index], message: 'Order updated successfully!' });
+  });
+
+  // Admin Delete Order: DELETE /api/orders/:id
+  app.delete('/api/orders/:id', (req, res) => {
+    const { id } = req.params;
+    const index = ordersDb.findIndex(o => o.id === id || o.trackingNumber === id);
+
+    if (index === -1) {
+      res.status(404).json({ error: `Order with ID ${id} not found` });
+      return;
+    }
+
+    const removed = ordersDb.splice(index, 1)[0];
+    res.json({ success: true, message: `Order ${removed.id} deleted successfully!`, deletedId: id });
+  });
+
+  // ==========================================
+  // 📊 6. ADMIN STATS & USER MANAGEMENT
+  // ==========================================
+  app.get('/api/admin/stats', (req, res) => {
+    const totalRevenue = ordersDb.reduce((sum, o) => sum + (o.total || 0), 0);
+    const activeShipments = ordersDb.filter(o => o.status !== 'delivered').length;
+    const deliveredOrders = ordersDb.filter(o => o.status === 'delivered').length;
+    const totalUsers = Object.keys(usersDb).length;
+    const totalProducts = productsDb.length;
+    const outOfStockCount = productsDb.filter(p => !p.inStock).length;
+
+    res.json({
+      totalRevenue: Number(totalRevenue.toFixed(2)),
+      totalOrders: ordersDb.length,
+      activeShipments,
+      deliveredOrders,
+      totalUsers,
+      totalProducts,
+      outOfStockCount,
+      recentOrders: ordersDb.slice(0, 5)
+    });
+  });
+
+  app.get('/api/admin/users', (req, res) => {
+    const usersList = Object.values(usersDb).map(entry => entry.user);
+    res.json({ users: usersList, total: usersList.length });
+  });
+
+  app.post('/api/admin/reset-data', (req, res) => {
+    const { mode } = req.body; // 'seed' | 'clear'
+    if (mode === 'clear') {
+      productsDb = [];
+      ordersDb.length = 0;
+      res.json({ success: true, message: 'All products and orders cleared. You can now add 100% real products.' });
+      return;
+    }
+
+    // Default Seed Reset
+    productsDb = JSON.parse(JSON.stringify(initialProducts));
+    res.json({ success: true, message: 'Database reset to default organic catalog!', totalProducts: productsDb.length });
   });
 
   // ==========================================

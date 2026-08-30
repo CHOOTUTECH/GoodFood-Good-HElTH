@@ -1,27 +1,34 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product, CartItem, User, Order } from '../types';
 import { initialProducts } from '../data/products';
-import { ProductService, CartService, AuthService, OrderService, OrderTrackerService, UserService, LoginPayload, RegisterPayload } from '../services/api';
+import { 
+  ProductService, 
+  CartService, 
+  AuthService, 
+  OrderService, 
+  OrderTrackerService, 
+  UserService, 
+  LoginPayload, 
+  RegisterPayload,
+  getLocalStoredProducts,
+  setLocalStoredProducts
+} from '../services/api';
 
 /**
  * ==============================================================================
- * SHOP STATE CONTEXT & API INTEGRATION HUB
+ * SHOP STATE CONTEXT & UNIFIED DATA STORE
  * ==============================================================================
  * 
  * 📌 HINDI / ENGLISH INSTRUCTIONS:
- * 1. User Auth:
- *    - `currentUser`: Logged-in user information (Name, Email, Phone, Saved Address).
- *    - `login()`: Backend API `POST /api/auth/login` call karta hai.
- *    - `register()`: Backend API `POST /api/auth/register` call karta hai.
- *    - `logout()`: Session clear karta hai.
- * 2. Order Tracking:
- *    - `orders`: User ke sabhi placed orders list.
- *    - `trackOrderById(id)`: Backend API `GET /api/orders/track/:id` se live delivery tracking details lata hai.
- * 3. Products & Cart:
- *    - Central state for shopping, cart, wishlist, and active screen navigation.
+ * 1. Unified Single Store:
+ *    - `products`: Authoritative store synchronized with Admin Dashboard.
+ *    - Whenever Admin adds, edits, or deletes a product, it immediately updates
+ *      all views (Home, Shop, Cart, Detail, Search, QuickView) without manual refresh.
+ * 2. User Auth & Orders:
+ *    - `currentUser`, `orders`, and live order tracking with persistent storage.
  */
 
-export type AppView = 'home' | 'shop' | 'product' | 'cart' | 'track' | 'account';
+export type AppView = 'home' | 'shop' | 'product' | 'cart' | 'track' | 'account' | 'admin';
 
 interface ShopContextType {
   // Products & Shop State
@@ -52,6 +59,14 @@ interface ShopContextType {
   setCurrentTrackedOrder: (order: Order | null) => void;
   trackOrderById: (orderIdOrTracking: string) => Promise<Order | null>;
   addNewOrder: (order: Order) => void;
+  refetchOrders: () => Promise<void>;
+
+  // Admin CRUD & Management Actions
+  createProduct: (productData: Partial<Product>) => Promise<{ success: boolean; product?: Product; message?: string }>;
+  updateProduct: (id: string, productData: Partial<Product>) => Promise<{ success: boolean; product?: Product; message?: string }>;
+  deleteProduct: (id: string) => Promise<{ success: boolean; message?: string }>;
+  updateOrderStatus: (orderId: string, status: Order['status'], note?: string, carrier?: string, estimatedDelivery?: string) => Promise<{ success: boolean; message?: string }>;
+  deleteOrder: (orderId: string) => Promise<{ success: boolean; message?: string }>;
 
   // Modals & UI Controls
   isQuickViewOpen: boolean;
@@ -88,11 +103,18 @@ const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
 export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // ==============================================================================
-  // 🔗 [API INTEGRATION POINT 1: FETCH PRODUCTS WITH DEMO FALLBACK]
+  // 🔗 [AUTHORITATIVE PRODUCT STORE (PERSISTENT & ADMIN-CONTROLLED)]
   // ==============================================================================
-  const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [products, setProducts] = useState<Product[]>(() => {
+    return getLocalStoredProducts();
+  });
   const [isLoadingProducts, setIsLoadingProducts] = useState<boolean>(false);
   const [productsError, setProductsError] = useState<string | null>(null);
+
+  // Sync products changes to localStorage automatically
+  useEffect(() => {
+    setLocalStoredProducts(products);
+  }, [products]);
 
   // Initialize Default Logged-In User or read from localStorage
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -104,7 +126,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return null;
       }
     }
-    // Default demonstration user
     return {
       id: 'usr-jairam-101',
       name: 'Jairam Singh',
@@ -134,6 +155,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return [];
       }
     }
+    const initialList = getLocalStoredProducts();
+    const item1 = initialList[0] || initialProducts[0];
+    const item2 = initialList[2] || initialProducts[2] || item1;
     return [
       {
         id: 'VG-8492',
@@ -148,16 +172,16 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         items: [
           {
-            product: initialProducts[0],
+            product: item1,
             quantity: 2,
             selectedSize: '250ml',
-            unitPrice: 18.99
+            unitPrice: item1?.price || 18.99
           },
           {
-            product: initialProducts[2],
+            product: item2,
             quantity: 1,
             selectedSize: '32 oz',
-            unitPrice: 22.00
+            unitPrice: item2?.price || 22.00
           }
         ],
         subtotal: 59.98,
@@ -220,7 +244,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [currentTrackedOrder, setCurrentTrackedOrder] = useState<Order | null>(null);
 
-  // Sync Orders to LocalStorage & Backend (GET /api/orders)
+  // Sync Orders to LocalStorage
   useEffect(() => {
     if (orders.length > 0) {
       localStorage.setItem('vg_orders_history', JSON.stringify(orders));
@@ -234,22 +258,23 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch {
-        // fallback
-      }
+      } catch {}
     }
+    const initialList = getLocalStoredProducts();
+    const item1 = initialList[0] || initialProducts[0];
+    const item2 = initialList[2] || initialProducts[2] || item1;
     return [
       {
-        product: initialProducts[0],
+        product: item1,
         quantity: 1,
-        selectedSize: '250ml',
-        unitPrice: 18.99
+        selectedSize: item1?.sizes?.[0] || '250ml',
+        unitPrice: item1?.price || 18.99
       },
       {
-        product: initialProducts[2],
+        product: item2,
         quantity: 1,
-        selectedSize: '16 oz',
-        unitPrice: 14.99
+        selectedSize: item2?.sizes?.[0] || '16 oz',
+        unitPrice: item2?.price || 14.99
       }
     ];
   });
@@ -267,60 +292,86 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const [currentView, setCurrentView] = useState<AppView>('home');
-  const [selectedProductId, setSelectedProductId] = useState<string>('avocado-oil');
+  const [selectedProductId, setSelectedProductId] = useState<string>(() => {
+    const list = getLocalStoredProducts();
+    return list[0]?.id || list[0]?.slug || 'avocado-oil';
+  });
   const [categoryFilter, setCategoryFilter] = useState<string>('All Products');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Refetch function for manual reload or retry
+  // Automatically propagate product updates (price changes, image changes, name edits) to Cart items
+  useEffect(() => {
+    if (products.length > 0) {
+      setCart(prevCart => {
+        const updated = prevCart
+          .filter(item => products.some(p => p.id === item.product.id || p.slug === item.product.id))
+          .map(item => {
+            const latestProd = products.find(p => p.id === item.product.id || p.slug === item.product.id);
+            if (!latestProd) return item;
+            let newUnitPrice = latestProd.price;
+            if (item.selectedSize && latestProd.pricePerSize && latestProd.pricePerSize[item.selectedSize]) {
+              newUnitPrice = latestProd.pricePerSize[item.selectedSize];
+            }
+            return {
+              ...item,
+              product: latestProd,
+              unitPrice: newUnitPrice
+            };
+          });
+        return updated;
+      });
+
+      // Also clean up wishlist
+      setWishlist(prev => prev.filter(id => products.some(p => p.id === id || p.slug === id)));
+
+      // If selectedProductId is invalid, fix it
+      setSelectedProductId(prev => {
+        const exists = products.some(p => p.id === prev || p.slug === prev);
+        return exists ? prev : (products[0]?.id || products[0]?.slug || '');
+      });
+    }
+  }, [products]);
+
+  // Sync cart to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('vg_cart', JSON.stringify(cart));
+  }, [cart]);
+
+  // Refetch function for manual reload
   const fetchProductsFromApi = async () => {
     setIsLoadingProducts(true);
     setProductsError(null);
     try {
       const prodData = await ProductService.getProducts();
-      if (prodData && Array.isArray(prodData.products) && prodData.products.length > 0) {
+      if (prodData && Array.isArray(prodData.products)) {
         setProducts(prodData.products);
-        setSelectedProductId(prev => prev || prodData.products[0].id || prodData.products[0].slug || '');
-      } else {
-        setProducts(initialProducts);
+        if (prodData.products.length > 0) {
+          setSelectedProductId(prev => prev || prodData.products[0].id || prodData.products[0].slug || '');
+        }
       }
     } catch {
-      // Keep demo products active
-      setProducts(initialProducts);
+      setProducts(getLocalStoredProducts());
     } finally {
       setIsLoadingProducts(false);
     }
   };
 
-  // Initial load from backend API: GET /api/products, GET /api/auth/me, GET /api/orders, GET /api/cart
+  // Initial load
   useEffect(() => {
     async function initBackendData() {
-      // 1. Fetch live products from backend (GET /api/products) - public endpoint
       await fetchProductsFromApi();
 
-      // Only attempt authenticated user endpoints if an auth token or logged-in user is present
       const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
       if (token) {
         try {
-          // 2. Fetch authenticated user profile (GET /api/auth/me)
           const user = await AuthService.getCurrentUser();
-          if (user) {
-            setCurrentUser(user);
-          }
+          if (user) setCurrentUser(user);
 
-          // 3. Fetch user orders (GET /api/orders)
           const fetchedOrders = await OrderService.getOrders();
           if (fetchedOrders && fetchedOrders.length > 0) {
             setOrders(fetchedOrders);
           }
-
-          // 4. Fetch cart from server (GET /api/cart)
-          const serverCart = await CartService.getCart();
-          if (serverCart && serverCart.length > 0) {
-            setCart(serverCart);
-          }
-        } catch {
-          // Silent catch for token expiry
-        }
+        } catch {}
       }
     }
     initBackendData();
@@ -492,6 +543,129 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
+  // Refetch orders list from backend API (GET /api/orders)
+  const fetchOrdersFromApi = async () => {
+    try {
+      const fetched = await OrderService.getOrders();
+      if (fetched && fetched.length > 0) {
+        setOrders(fetched);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  // Admin Create Product
+  const createProduct = async (productData: Partial<Product>) => {
+    try {
+      const res = await ProductService.createProduct(productData);
+      if (res.success && res.product) {
+        setProducts(prev => [res.product, ...prev.filter(p => p.id !== res.product.id)]);
+      }
+      return res;
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Failed to create product' };
+    }
+  };
+
+  // Admin Update Product
+  const updateProduct = async (id: string, productData: Partial<Product>) => {
+    try {
+      const res = await ProductService.updateProduct(id, productData);
+      if (res.success && res.product) {
+        setProducts(prev => prev.map(p => (p.id === id || p.slug === id ? res.product : p)));
+      }
+      return res;
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Failed to update product' };
+    }
+  };
+
+  // Admin Delete Product
+  const deleteProduct = async (id: string) => {
+    try {
+      const res = await ProductService.deleteProduct(id);
+      if (res.success) {
+        setProducts(prev => prev.filter(p => p.id !== id && p.slug !== id));
+      }
+      return res;
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Failed to delete product' };
+    }
+  };
+
+  // Admin Update Order Status
+  const updateOrderStatus = async (
+    orderId: string, 
+    status: Order['status'], 
+    note?: string, 
+    carrier?: string, 
+    estimatedDelivery?: string
+  ) => {
+    try {
+      const res = await OrderService.updateOrderStatus(orderId, status, note, carrier, estimatedDelivery);
+      if (res.success) {
+        setOrders(prev =>
+          prev.map(o => {
+            if (o.id === orderId || o.trackingNumber === orderId) {
+              const validStatuses: Order['status'][] = ['placed', 'harvested', 'packed', 'in_transit', 'out_for_delivery', 'delivered'];
+              const statusIndex = validStatuses.indexOf(status);
+              const nowStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
+
+              const updatedSteps = o.trackingSteps.map((step, idx) => {
+                if (idx < statusIndex) {
+                  return { ...step, completed: true, current: false };
+                } else if (idx === statusIndex) {
+                  return {
+                    ...step,
+                    completed: true,
+                    current: true,
+                    timestamp: nowStr,
+                    description: note || step.description
+                  };
+                } else {
+                  return { ...step, completed: false, current: false };
+                }
+              });
+
+              return {
+                ...o,
+                status,
+                carrier: carrier || o.carrier,
+                estimatedDelivery: estimatedDelivery || o.estimatedDelivery,
+                trackingSteps: updatedSteps
+              };
+            }
+            return o;
+          })
+        );
+        // Also update currentTrackedOrder if active
+        if (currentTrackedOrder && (currentTrackedOrder.id === orderId || currentTrackedOrder.trackingNumber === orderId)) {
+          trackOrderById(orderId);
+        }
+      }
+      return res;
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Failed to update order status' };
+    }
+  };
+
+  // Admin Delete Order
+  const deleteOrder = async (orderId: string) => {
+    try {
+      const res = await OrderService.deleteOrder(orderId);
+      if (res.success) {
+        setOrders(prev => prev.filter(o => o.id !== orderId && o.trackingNumber !== orderId));
+        if (currentTrackedOrder && (currentTrackedOrder.id === orderId || currentTrackedOrder.trackingNumber === orderId)) {
+          setCurrentTrackedOrder(null);
+        }
+      }
+      return res;
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Failed to delete order' };
+    }
+  };
+
   const openQuickView = (product: Product) => {
     setQuickViewProduct(product);
     setIsQuickViewOpen(true);
@@ -533,6 +707,12 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCurrentTrackedOrder,
         trackOrderById,
         addNewOrder,
+        refetchOrders: fetchOrdersFromApi,
+        createProduct,
+        updateProduct,
+        deleteProduct,
+        updateOrderStatus,
+        deleteOrder,
         isQuickViewOpen,
         quickViewProduct,
         isSearchOpen,

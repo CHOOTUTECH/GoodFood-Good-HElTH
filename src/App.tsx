@@ -13,6 +13,7 @@ import { ShopView } from './components/ShopView';
 import { ProductDetailView } from './components/ProductDetailView';
 import { CartView } from './components/CartView';
 import { TrackOrderView } from './components/TrackOrderView';
+import { AdminDashboard } from './components/AdminDashboard';
 import { CheckoutModal } from './components/CheckoutModal';
 import { SearchModal } from './components/SearchModal';
 import { AboutModal } from './components/AboutModal';
@@ -88,6 +89,18 @@ const AppContent: React.FC = () => {
               transition={{ duration: 0.2 }}
             >
               <TrackOrderView />
+            </motion.div>
+          )}
+
+          {currentView === 'admin' && (
+            <motion.div
+              key="admin"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <AdminDashboard />
             </motion.div>
           )}
         </AnimatePresence>

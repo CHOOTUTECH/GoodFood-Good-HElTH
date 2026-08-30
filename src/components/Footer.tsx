@@ -125,6 +125,14 @@ export const Footer: React.FC = () => {
                   Healthy Living Blog
                 </button>
               </li>
+              <li>
+                <button
+                  onClick={() => setCurrentView('admin')}
+                  className="hover:text-[#153e26] text-[#2d683a] font-medium transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <span>🛡️ Store Admin Center</span>
+                </button>
+              </li>
             </ul>
           </div>
 

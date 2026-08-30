@@ -17,9 +17,10 @@ import {
   LogIn, 
   LogOut, 
   Package, 
-  CheckCircle2 
+  CheckCircle2,
+  ShieldCheck
 } from 'lucide-react';
-import { useShop } from '../context/ShopContext';
+import { useShop, AppView } from '../context/ShopContext';
 
 export const Header: React.FC = () => {
   const {
@@ -59,7 +60,7 @@ export const Header: React.FC = () => {
     setMobileMenuOpen(false);
   };
 
-  const handleNavClick = (view: 'home' | 'shop' | 'cart' | 'track') => {
+  const handleNavClick = (view: AppView) => {
     setCurrentView(view);
     setMobileMenuOpen(false);
   };
@@ -92,6 +93,14 @@ export const Header: React.FC = () => {
             <span className="font-medium tracking-wide">Free Delivery on orders over $49 • 100% Farm Fresh Traceability</span>
           </div>
           <div className="flex items-center gap-3 sm:gap-4 font-medium text-[#c0dec7]">
+            <button
+              onClick={() => handleNavClick('admin')}
+              className="hover:text-white flex items-center gap-1 cursor-pointer transition-colors text-xs font-semibold text-[#a3e635]"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Admin Center</span>
+            </button>
+            <span className="text-[#4e825e]">|</span>
             <button
               onClick={() => handleNavClick('track')}
               className="hover:text-white flex items-center gap-1 cursor-pointer transition-colors text-xs font-semibold"
@@ -208,6 +217,20 @@ export const Header: React.FC = () => {
             )}
           </button>
 
+          {/* Admin Center Link */}
+          <button
+            id="nav-admin-center-desktop"
+            onClick={() => handleNavClick('admin')}
+            className={`transition-colors hover:text-[#153e26] pb-1 cursor-pointer flex items-center gap-1.5 ${
+              currentView === 'admin'
+                ? 'text-[#153e26] font-semibold border-b-2 border-[#153e26]'
+                : 'text-[#153e26]'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4 text-[#2e7d32]" />
+            <span className="font-semibold">Admin Center</span>
+          </button>
+
           <button
             onClick={() => setIsAboutOpen(true)}
             className="transition-colors hover:text-[#153e26] pb-1 cursor-pointer text-[#4a554a]"
@@ -279,6 +302,22 @@ export const Header: React.FC = () => {
                         </span>
                         <span className="text-xs font-bold bg-[#e3efe6] text-[#153e26] px-2 py-0.5 rounded-full">
                           {orders.length}
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setCurrentView('admin');
+                          setAccountMenuOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-[#153e26] hover:bg-[#eef5ed] font-medium rounded-xl transition-colors cursor-pointer flex items-center justify-between"
+                      >
+                        <span className="flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4 text-[#2e7d32]" />
+                          <span>Admin Center (Store Control)</span>
+                        </span>
+                        <span className="text-[10px] font-bold uppercase bg-[#dcfce7] text-[#15803d] px-2 py-0.5 rounded-full">
+                          Real Data
                         </span>
                       </button>
 
@@ -488,6 +527,24 @@ export const Header: React.FC = () => {
                   </span>
                   <span className="text-xs font-bold bg-[#e3efe6] text-[#153e26] px-2 py-0.5 rounded-full">
                     {orders.length}
+                  </span>
+                </button>
+
+                {/* Mobile Admin Link */}
+                <button
+                  onClick={() => handleNavClick('admin')}
+                  className={`w-full flex items-center justify-between px-3 py-3 rounded-xl text-sm font-semibold transition-colors cursor-pointer ${
+                    currentView === 'admin'
+                      ? 'bg-[#153e26] text-white'
+                      : 'text-[#153e26] bg-[#f0f6ee] hover:bg-[#e4efe0]'
+                  }`}
+                >
+                  <span className="flex items-center gap-2.5">
+                    <ShieldCheck className="w-4 h-4 text-[#2e7d32]" />
+                    Admin Center (Store Control)
+                  </span>
+                  <span className="text-[10px] font-bold uppercase bg-[#a3e635] text-[#153e26] px-2 py-0.5 rounded-full">
+                    Real Data
                   </span>
                 </button>
 

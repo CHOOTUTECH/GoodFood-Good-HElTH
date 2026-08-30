@@ -44,6 +44,7 @@ export interface Product {
     iron?: string;
   };
   inStock: boolean;
+  stockCount?: number;
   featured?: boolean;
 }
 
